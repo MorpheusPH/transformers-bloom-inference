@@ -21,6 +21,7 @@ from ..utils import (
     create_generate_request,
     get_str_dtype,
     print_rank_n,
+    fetch_hostfile,
 )
 from .grpc_utils.pb import generation_pb2, generation_pb2_grpc
 
@@ -29,6 +30,7 @@ class ModelDeployment(MIIServerClient):
     def __init__(self, args: argparse.Namespace, use_grpc_server: bool = False, cuda_visible_devices: List[int] = [0]):
         self.cuda_visible_devices = cuda_visible_devices
         self.num_gpus = len(self.cuda_visible_devices)
+        self._initialize_resource_pool(args.hostfile)
         self.use_grpc_server = use_grpc_server
 
         if self.use_grpc_server:
@@ -56,6 +58,14 @@ class ModelDeployment(MIIServerClient):
         self.ports = []
         for i in range(self.num_gpus):
             self.ports.append(50950 + self.cuda_visible_devices[i])
+
+    def _initialize_resource_pool(self, hostfile_path):
+        self.resource_pool = fetch_hostfile(hostfile_path)
+        print_rank_n(self.resource_pool)
+        if self.resource_pool:
+            num_gpus = sum(self.resource_pool.values())
+            self.cuda_visible_devices = list(range(num_gpus))
+            self.num_gpus = num_gpus
 
     def _wait_until_server_is_live(self):
         sockets_open = False
@@ -98,7 +108,11 @@ class ModelDeployment(MIIServerClient):
 
             cuda_visible_devices = ",".join(map(str, self.cuda_visible_devices))
 
-            cmd = f"deepspeed --master_port {master_port} --include localhost:{cuda_visible_devices} --module {cmd}"
+            if not self.resource_pool:
+                cmd = f"deepspeed --master_port {master_port} --include localhost:{cuda_visible_devices} --module {cmd}"
+            else:
+                #cmd = f"deepspeed --master_port {master_port} --hostfile {args.hostfile} --enable_each_rank_log /home/ubuntu/vm_shared/log --module {cmd}"
+                cmd = f"deepspeed --master_port {master_port} --hostfile {args.hostfile} --module {cmd}"
         else:
             raise NotImplementedError(f"unsupported deployment_framework: {args.deployment_framework}")
 
@@ -107,10 +121,20 @@ class ModelDeployment(MIIServerClient):
 
     def _initialize_grpc_client(self):
         self.stubs = []
-        for i in self.ports:
-            channel = grpc.aio.insecure_channel(f"localhost:{i}")
-            stub = generation_pb2_grpc.GenerationServiceStub(channel)
-            self.stubs.append(stub)
+        if self.resource_pool:
+            s_index = 0
+            for hostname, slot in self.resource_pool.items():
+                h_ports = self.ports[s_index:s_index+slot]
+                s_index = s_index + slot
+                for i in h_ports:
+                    channel = grpc.aio.insecure_channel(f"{hostname}:{i}")
+                    stub = generation_pb2_grpc.GenerationServiceStub(channel)
+                    self.stubs.append(stub)
+        else:
+            for i in self.ports:
+                channel = grpc.aio.insecure_channel(f"localhost:{i}")
+                stub = generation_pb2_grpc.GenerationServiceStub(channel)
+                self.stubs.append(stub)
 
     # runs task in parallel and return the result from the first task
     async def _query_in_tensor_parallel(self, text: List[str], generate_kwargs: dict):

@@ -20,4 +20,5 @@ from .utils import (
     print_rank_n,
     run_and_log_time,
     run_rank_n,
+    fetch_hostfile,
 )

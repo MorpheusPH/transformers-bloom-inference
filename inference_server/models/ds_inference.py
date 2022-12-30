@@ -70,7 +70,6 @@ class DSInferenceModel(Model):
 
         self.model = self.model.module
         self.input_device = torch.cuda.current_device()
-
         print_rank_n("Model loaded")
         dist.barrier()
 

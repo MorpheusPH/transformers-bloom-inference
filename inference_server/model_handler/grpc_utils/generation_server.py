@@ -24,13 +24,10 @@ class GenerationServer(generation_pb2_grpc.GenerationServiceServicer):
         generate_kwargs = self._unpack_proto_query_kwargs(request.generate_kwargs)
 
         request = create_generate_request(text=text, generate_kwargs=generate_kwargs)
-
         local_rank = int(os.getenv("LOCAL_RANK", "0"))
         torch.cuda.set_device(local_rank)
         self.model.input_device = local_rank
-
         response = self.model.generate(request)
-
         if isinstance(response, Exception):
             # if exception occurs, we don't this subprocess to crash
             response = generation_pb2.GenerationResponse(error=str(response))

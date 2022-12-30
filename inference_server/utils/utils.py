@@ -1,7 +1,10 @@
 import argparse
+import collections
 import copy
 import json
 import math
+import os
+import re
 import sys
 import time
 import traceback
@@ -11,7 +14,7 @@ from typing import Any, List, Tuple, Union
 import torch
 import torch.distributed as dist
 
-from ..constants import DS_INFERENCE, DS_INFERENCE_BLOOM_FP16, DS_INFERENCE_BLOOM_INT8, DS_ZERO, HF_ACCELERATE
+from ..constants import DS_INFERENCE, DS_INFERENCE_BLOOM_FP16, DS_INFERENCE_BLOOM_INT8, DS_ZERO, HF_ACCELERATE, DS_INFERENCE_BLOOM_INT8_SELF, DS_INFERNECE_BLOOM_FP16_SELF
 
 
 # used for benchmarks
@@ -67,7 +70,7 @@ def parse_args(parser: argparse.ArgumentParser) -> argparse.Namespace:
 
     args.dtype = get_torch_dtype(args.dtype)
     args.generate_kwargs = json.loads(args.generate_kwargs)
-    args.use_pre_sharded_checkpoints = args.model_name in [DS_INFERENCE_BLOOM_FP16, DS_INFERENCE_BLOOM_INT8]
+    args.use_pre_sharded_checkpoints = args.model_name in [DS_INFERENCE_BLOOM_FP16, DS_INFERENCE_BLOOM_INT8, DS_INFERENCE_BLOOM_INT8_SELF,DS_INFERNECE_BLOOM_FP16_SELF]
 
     return args
 
@@ -175,3 +178,52 @@ def get_exception_response(query_id: int, method: str, debug: bool = False):
         response["stack_trace"] = stack_trace
 
     return response
+
+def fetch_hostfile(hostfile_path):
+    if not os.path.isfile(hostfile_path):
+        logger.warning("Unable to find hostfile, will proceed with training "
+                       "with local resources only.")
+        return None
+
+    # e.g., worker-0 slots=16
+    with open(hostfile_path, 'r') as fd:
+        hostfile_text = fd.readlines()
+
+    return  _parse_hostfile(hostfile_text)
+
+
+def _parse_hostfile(hostfile_lines):
+    # Regex matches one or more non-whitespace characters (\S+) at the start of
+    # the line, followed by one or more whitespace characters (\s+), followed
+    # by the string "slots=", followed by one or more digits (\d+).
+    pattern = r'^(\S+)\s+slots=(\d+)'
+
+    resource_pool = collections.OrderedDict()
+    for line in hostfile_lines:
+        line = line.strip()
+        match = re.search(pattern, line)
+        if line.startswith("#") or line == "":
+            # hostfile comment or empty line, ignore
+            continue
+        elif match:
+            host = match.group(1)
+            num_slots = int(match.group(2))
+            if host in resource_pool:
+                logger.error(f"Bad hostfile text: {hostfile_lines}")
+                raise ValueError(
+                    f"Hostfile contains multiple entries for {host}, unable to proceed with launching"
+                )
+            resource_pool[host] = num_slots
+        else:
+            logger.error(f"Bad hostfile text: {hostfile_lines}")
+            raise ValueError(
+                "Hostfile contains a bad entry: {line}, unable to proceed with launching"
+            )
+
+    if len(resource_pool) == 0:
+        logger.error(f"Bad hostfile text: {hostfile_lines}")
+        raise ValueError(
+            "Hostfile is empty or not formatted correctly, unable to proceed with launching."
+        )
+
+    return resource_pool

@@ -1,5 +1,5 @@
 import argparse
-
+import os
 import requests
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.routing import APIRoute, Mount
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from transformers import AutoTokenizer
+#from transformers import AutoTokenizer
 from uvicorn import run
 
 
@@ -15,8 +15,8 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     group = parser.add_argument_group(title="launch config")
-    group.add_argument("--ui_host", type=str, default="127.0.0.1", help="host address for UI")
-    group.add_argument("--ui_port", type=int, default=5001, help="port number for UI")
+    group.add_argument("--ui_host", type=str, default="0.0.0.0", help="host address for UI")
+    group.add_argument("--ui_port", type=int, default=5000, help="port number for UI")
     group.add_argument("--server_host", type=str, default="127.0.0.1", help="host address for generation server")
     group.add_argument("--server_port", type=int, default=5000, help="port number for generation server")
 
@@ -28,11 +28,11 @@ class Server:
         self.templates = Jinja2Templates(directory="templates")
         self.ui_host = args.ui_host
         self.ui_port = args.ui_port
-        self.server_host = args.server_host
+        self.server_host = os.getenv("INFERENCE_SERVER_HOST",args.server_host)
         self.server_port = args.server_port
         self.workers = 1
 
-        self.tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom")
+        #self.tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom")
 
         self.app = FastAPI(
             routes=[
@@ -49,8 +49,11 @@ class Server:
         return self.templates.TemplateResponse("index.html", {"request": request})
 
     def generate(self, request: dict) -> str:
+        input_len = len(request["text"][0])
         response = requests.post(f"http://{self.server_host}:{self.server_port}/generate", json=request, verify=False)
-        return response.json()
+        response_dict = response.json()
+        response_dict["text"][0] = response_dict["text"][0][input_len:]
+        return response_dict 
 
     def run(self):
         # get around CORS

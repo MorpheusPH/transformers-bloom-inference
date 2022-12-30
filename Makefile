@@ -12,6 +12,37 @@ gen-proto:
 
 	rm -rf inference_server/model_handler/grpc_utils/pb/*.py-e
 
+
+bloom-int8-shards:
+	HOSTFILE=/home/ubuntu/vm_shared/hostfile \
+        NCCL_IB_DISABLE=1 \
+        NCCL_SOCKET_IFNAME=ens3 \
+        NCCL_DEBUG=INFO \
+        TOKENIZERS_PARALLELISM=false \
+        MODEL_NAME=/home/ubuntu/.cache/bloom-int8-shards \
+        MODEL_CLASS=AutoModelForCausalLM \
+        DEPLOYMENT_FRAMEWORK=ds_inference \
+        DTYPE=int8 \
+        MAX_INPUT_LENGTH=2048 \
+        MAX_BATCH_SIZE=4 \
+        CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+        gunicorn -t 0 -w 1 -b 127.0.0.1:5000 inference_server.server:app --access-logfile - --access-logformat '%(h)s %(t)s "%(r)s" %(s)s %(b)s'
+
+bloom-fp16-shards:
+	HOSTFILE=/home/ubuntu/vm_shared/hostfile \
+        NCCL_IB_DISABLE=1 \
+        NCCL_SOCKET_IFNAME=ens3 \
+        NCCL_DEBUG=INFO \
+        TOKENIZERS_PARALLELISM=false \
+        MODEL_NAME=/home/ubuntu/.cache/bloom-fp16-shards \
+        MODEL_CLASS=AutoModelForCausalLM \
+        DEPLOYMENT_FRAMEWORK=ds_inference \
+	DTYPE=fp16 \
+        MAX_INPUT_LENGTH=2048 \
+        MAX_BATCH_SIZE=4 \
+        CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+        gunicorn -t 0 -w 1 -b 127.0.0.1:5000 inference_server.server:app --access-logfile - --access-logformat '%(h)s %(t)s "%(r)s" %(s)s %(b)s'
+
 bloom-176b:
 	TOKENIZERS_PARALLELISM=false \
 	MODEL_NAME=bigscience/bloom \
@@ -47,6 +78,10 @@ bloomz-176b:
 	gunicorn -t 0 -w 1 -b 127.0.0.1:5000 inference_server.server:app --access-logfile - --access-logformat '%(h)s %(t)s "%(r)s" %(s)s %(b)s'
 
 bloom-176b-int8:
+	HOSTFILE=/home/ubuntu/vm_shared/hostfile \
+	NCCL_IB_DISABLE=1 \
+	NCCL_SOCKET_IFNAME=ens3 \
+	NCCL_DEBUG=INFO \
 	TOKENIZERS_PARALLELISM=false \
 	MODEL_NAME=microsoft/bloom-deepspeed-inference-int8 \
 	MODEL_CLASS=AutoModelForCausalLM \

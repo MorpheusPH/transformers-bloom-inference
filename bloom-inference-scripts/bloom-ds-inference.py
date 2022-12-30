@@ -35,8 +35,9 @@ from transformers.utils import is_offline_mode
 
 
 # the Deepspeed team made these so it's super fast to load (~1 minute), rather than wait 10-20min loading time.
-tp_presharded_models = ["microsoft/bloom-deepspeed-inference-int8", "microsoft/bloom-deepspeed-inference-fp16"]
-
+#tp_presharded_models = ["microsoft/bloom-deepspeed-inference-int8", "microsoft/bloom-deepspeed-inference-fp16"]
+# add slef-trained model
+tp_presharded_models = ["microsoft/bloom-deepspeed-inference-int8", "microsoft/bloom-deepspeed-inference-fp16","/home/ubuntu/.cache/bloom-fp16-shards","/home/ubuntu/.cache/bloom-int8-shards"]
 t_start = time.time()
 
 num_tokens = 100
@@ -67,6 +68,10 @@ def print_rank0(*msg):
 
 
 def get_repo_root(model_name_or_path):
+
+    if os.path.isdir(model_name_or_path):
+       return model_name_or_path 
+
     # checks if online or not
     if is_offline_mode():
         print_rank0("Offline mode: forcing local_files_only=True")

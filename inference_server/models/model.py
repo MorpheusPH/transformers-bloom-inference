@@ -35,7 +35,8 @@ class Model:
                 if torch.is_tensor(input_tokens[t]):
                     input_tokens[t] = input_tokens[t].to(self.input_device)
 
-            output = GenerationMixin(self.model).generate(
+            #output = GenerationMixin(self.model).generate(
+            output = self.model.generate(
                 **input_tokens,
                 min_length=request.min_length,
                 do_sample=request.do_sample,
@@ -63,16 +64,17 @@ class Model:
             )
 
             output_tokens = output.sequences
-            num_generated_tokens = output.num_generated_tokens.tolist()
-
-            if request.remove_input_from_output:
+            #num_generated_tokens = output.num_generated_tokens.tolist()
+            num_generated_tokens = None
+            
+            #if request.remove_input_from_output:
                 # the generate method's output includes input too. Remove input if
                 # that is requested by the user
-                output_tokens = [x[-i:] if i != 0 else [] for x, i in zip(output_tokens, num_generated_tokens)]
+            #   output_tokens = [x[-i:] if i != 0 else [] for x, i in zip(output_tokens, num_generated_tokens)]
 
             output_text = self.tokenizer.batch_decode(output_tokens, skip_special_tokens=True)
-
-            return GenerateResponse(text=output_text, num_generated_tokens=num_generated_tokens)
+            #return GenerateResponse(text=output_text, num_generated_tokens=num_generated_tokens)
+            return GenerateResponse(text=output_text)
         except Exception as exception:
             return exception
 
@@ -82,6 +84,10 @@ class Model:
 
 
 def get_downloaded_model_path(model_name: str):
+
+    if os.path.isdir(model_name):
+       return model_name
+
     f = partial(
         snapshot_download,
         repo_id=model_name,

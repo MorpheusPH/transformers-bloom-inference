@@ -1,0 +1,4 @@
+CUDA_HOME=/usr/local/cuda
+LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu
+NCCL_IB_DISABLE=1
+NCCL_SOCKET_IFNAME=ens3

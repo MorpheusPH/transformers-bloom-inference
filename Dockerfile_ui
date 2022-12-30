@@ -1,0 +1,27 @@
+FROM python:3.8.16
+
+ENV PORT=5000
+
+WORKDIR /src
+
+# necessary stuff
+RUN pip install requests \
+    transformers==4.24.0 \
+    fastapi \
+    uvicorn \
+    jinja2 \
+    --no-cache-di
+
+
+# copy the code
+COPY ui.py ui.py
+COPY assets assets
+COPY static static
+COPY templates templates
+COPY LICENSE LICENSE
+
+
+EXPOSE ${PORT}
+
+CMD python -m ui
+
